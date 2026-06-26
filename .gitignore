@@ -1,0 +1,19 @@
+# Python environments
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# IDEs
+.vscode/
+.idea/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Reinforcement Learning outputs
+models/
+logs/
+*.zip
