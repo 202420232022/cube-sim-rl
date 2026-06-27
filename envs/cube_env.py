@@ -43,6 +43,10 @@ class CubeBalancingEnv(gym.Env):
         
         # 【モーターパワーの最大値】URDFの数値をオーバーライドできます
         self.max_motor_torque = 0.5 
+        
+        # 【エピソードの最大ステップ数】
+        self.current_step = 0
+        self.max_steps = 1000
 
     def reset(self, seed=None, options=None):
         """
@@ -76,6 +80,8 @@ class CubeBalancingEnv(gym.Env):
         p.changeDynamics(self.robot_id, -1, activationState=p.ACTIVATION_STATE_WAKE_UP)
         p.changeDynamics(self.robot_id, 0, activationState=p.ACTIVATION_STATE_WAKE_UP)
         
+        self.current_step = 0
+        
         return self._get_obs(), {}
 
     def step(self, action):
@@ -99,8 +105,11 @@ class CubeBalancingEnv(gym.Env):
             force=torque
         )
         
-        # 2. 物理シミュレーションを1ステップ進める (1/240秒)
-        p.stepSimulation()
+        # 3. アクションリピート (4コマ分同じトルクをかけ続ける = 60Hz制御)
+        for _ in range(4):
+            p.stepSimulation()
+            
+        self.current_step += 1
         
         # 3. 現在の状況を取得
         obs = self._get_obs()
@@ -112,7 +121,8 @@ class CubeBalancingEnv(gym.Env):
         # 【ゲームオーバーのルール】
         # もし45度(約0.78rad)以上傾いたら倒れたとみなして終了(Terminated)
         terminated = bool(abs(current_angle) > (math.pi / 4.0))
-        truncated = False
+        # 1000ステップ（約16.6秒）耐えきったら時間切れクリア(Truncated)
+        truncated = bool(self.current_step >= self.max_steps)
         
         return obs, reward, terminated, truncated, {}
 
@@ -143,8 +153,8 @@ class CubeBalancingEnv(gym.Env):
         # ベース報酬：倒れていなければ毎ステップもらえる「生存ポイント」
         reward = 2.0 
         
-        # 減点1：直立（0度）から傾いているほど減点
-        angle_penalty = (cube_angle ** 2) * 10.0
+        # 減点1：直立（0度）から傾いているほど減点 (二次関数から絶対値ベースに変更し、微小な揺れへの感度をアップ)
+        angle_penalty = abs(cube_angle) * 10.0
         
         # 減点2：無駄にキューブがグラグラ揺れていたら減点
         vel_penalty = (cube_velocity ** 2) * 0.1

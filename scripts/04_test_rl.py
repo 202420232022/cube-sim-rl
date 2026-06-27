@@ -94,7 +94,8 @@ def main():
     model = PPO.load(model_path)
     obs = vec_env.reset()
     
-    dt = 1.0 / 240.0
+    # アクションリピート(4回)が導入されたため、1ステップ＝4/240秒＝1/60秒になります
+    dt = 1.0 / 60.0
     
     print("\nテストを開始します。")
     while True:
