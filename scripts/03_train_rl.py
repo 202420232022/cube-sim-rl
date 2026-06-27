@@ -160,11 +160,11 @@ def main():
     vec_env = DummyVecEnv([lambda: env])
     
     if resume_model_path is None:
-        print(f"\n【Initialize】新規モデルの学習を開始します。（保存先: latest）")
+        print(f"\n【Initialize】新規モデルの学習を開始します。(保存先: latest)")
         model = PPO("MlpPolicy", vec_env, verbose=1, tensorboard_log=os.path.join(current_v_dir, "logs"))
         reset_timesteps = True
     else:
-        print(f"\n【Resume】指定されたチェックポイントの重みを引き継いで学習を再開します。（保存先: latest）")
+        print(f"\n【Resume】指定されたチェックポイントの重みを引き継いで学習を再開します。(保存先: latest)")
         model = PPO.load(resume_model_path, env=vec_env, tensorboard_log=os.path.join(current_v_dir, "logs"))
         reset_timesteps = False
     
