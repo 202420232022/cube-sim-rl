@@ -165,13 +165,30 @@ def main():
     set_random_seed(seed)
     vec_env.seed(seed)
     
+    # 実機制御に向けたハイエンドPPOハイパーパラメータ
+    custom_objects = {
+        "learning_rate": 1e-4,  # 学習率を下げて破局的忘却（急激な記憶の上書き）を防止 (デフォルト 3e-4)
+        "n_steps": 4096,        # 1回の学習に使う経験データを倍増し、より慎重に学習 (デフォルト 2048)
+        "batch_size": 256,      # バッチサイズを大きくして勾配のブレを抑制 (デフォルト 64)
+        "gamma": 0.995,         # より遠い未来の報酬を重視する（バランス維持に有効） (デフォルト 0.99)
+        "ent_coef": 0.005,      # 探索を促し、1つの過激な操作への過学習を防ぐ (デフォルト 0.0)
+    }
+    
     if resume_model_path is None:
         print(f"\n【Initialize】新規モデルの学習を開始します。(保存先: latest)")
-        model = PPO("MlpPolicy", vec_env, verbose=1, tensorboard_log=os.path.join(current_v_dir, "logs"))
+        # 新規学習時は脳みそ（ニューラルネットワーク）のサイズを拡張して複雑な制御に対応
+        policy_kwargs = dict(net_arch=dict(pi=[256, 256], vf=[256, 256]))
+        model = PPO("MlpPolicy", vec_env, verbose=1, 
+                    tensorboard_log=os.path.join(current_v_dir, "logs"),
+                    policy_kwargs=policy_kwargs,
+                    **custom_objects)
         reset_timesteps = True
     else:
         print(f"\n【Resume】指定されたチェックポイントの重みを引き継いで学習を再開します。(保存先: latest)")
-        model = PPO.load(resume_model_path, env=vec_env, tensorboard_log=os.path.join(current_v_dir, "logs"))
+        # 古いモデルを引き継ぐ場合、脳のサイズは当時のままですが、学習率などの安全設定は上書き適用されます
+        model = PPO.load(resume_model_path, env=vec_env, 
+                         tensorboard_log=os.path.join(current_v_dir, "logs"),
+                         custom_objects=custom_objects)
         reset_timesteps = False
     
     checkpoint_callback = ShortCheckpointCallback(
