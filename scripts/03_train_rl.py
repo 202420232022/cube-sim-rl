@@ -2,52 +2,185 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+import glob
+import shutil
+from datetime import datetime
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import BaseCallback
 
 from envs.cube_env import CubeBalancingEnv
+
+class ShortCheckpointCallback(BaseCallback):
+    def __init__(self, save_freq, save_path, verbose=1):
+        super(ShortCheckpointCallback, self).__init__(verbose)
+        self.save_freq = save_freq
+        self.save_path = save_path
+
+    def _init_callback(self):
+        os.makedirs(self.save_path, exist_ok=True)
+
+    def _on_step(self):
+        if self.n_calls % self.save_freq == 0:
+            step_k = self.num_timesteps // 1000
+            path = os.path.join(self.save_path, f"{step_k}k.zip")
+            self.model.save(path)
+            if self.verbose > 0:
+                print(f"\n[SAVE] チェックポイントを保存しました: {step_k}k.zip")
+        return True
+
+def select_zip_in_dir(chosen_dir):
+    zips = glob.glob(os.path.join(chosen_dir, "*.zip"))
+    if not zips:
+        return None
+        
+    zips.sort(key=os.path.getmtime, reverse=True)
+    
+    print("\n===============================")
+    print(f"【{os.path.basename(chosen_dir)} 内のチェックポイント選択】")
+    print("0: 最新のチェックポイント (デフォルト)")
+    for i, file_path in enumerate(zips, 1):
+        filename = os.path.basename(file_path)
+        print(f"{i}: {filename} からロードする")
+    print("===============================")
+    
+    while True:
+        try:
+            choice = input(f"\nロードするチェックポイントの番号を入力してください [0-{len(zips)}]: ")
+            if choice.strip() == "" or choice == "0":
+                return zips[0]
+            choice_idx = int(choice) - 1
+            if 0 <= choice_idx < len(zips):
+                return zips[choice_idx]
+            else:
+                print("※正しい番号を入力してください。")
+        except ValueError:
+            print("※数字を入力してください。")
+
+
+def select_training_mode():
+    models_dir = os.path.join("results", "models")
+    latest_dir = os.path.join(models_dir, "latest")
+    
+    archives = [os.path.join(models_dir, d) for d in os.listdir(models_dir) 
+                if os.path.isdir(os.path.join(models_dir, d)) and d != "latest"]
+    archives.sort(key=os.path.getmtime, reverse=True)
+    
+    print("\n===============================")
+    print("【学習モードの選択】")
+    print("0: [Initialize] 新規モデルを初期化して学習を開始する")
+    
+    has_latest = os.path.exists(latest_dir) and glob.glob(os.path.join(latest_dir, "*.zip"))
+    options = []
+    
+    if has_latest:
+        options.append(latest_dir)
+        print("1: [Resume] 現在の latest からモデルをロードして学習を再開する")
+        
+    for d in archives:
+        options.append(d)
+        idx = len(options)
+        d_name = os.path.basename(d)
+        print(f"{idx}: [Resume] アーカイブ ({d_name}) からモデルをロードして学習を再開する")
+    print("===============================")
+    
+    def archive_latest():
+        if os.path.exists(latest_dir):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            archive_dir = os.path.join(models_dir, timestamp)
+            shutil.move(latest_dir, archive_dir)
+            print(f"※既存の latest データを {timestamp} にアーカイブしました。")
+            return timestamp
+        return None
+            
+    while True:
+        try:
+            choice = input(f"\n番号を入力してEnterを押してください [0-{len(options)}]: ")
+            if choice.strip() == "":
+                choice_idx = 1 if has_latest else 0
+            else:
+                choice_idx = int(choice)
+            
+            # 0: Initialize
+            if choice_idx == 0:
+                archive_latest()
+                os.makedirs(latest_dir, exist_ok=True)
+                with open(os.path.join(latest_dir, "history.txt"), "w", encoding="utf-8") as f:
+                    f.write("【Model Lineage】\n")
+                    f.write(f"作成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write("このモデルは、新規に初期化されたベースモデルから学習を開始しています。\n")
+                return None, latest_dir
+                
+            # 1以降: Resume
+            elif 1 <= choice_idx <= len(options):
+                chosen_dir = options[choice_idx - 1]
+                
+                chosen_zip = select_zip_in_dir(chosen_dir)
+                if not chosen_zip:
+                    print("※ そのディレクトリ内にモデルが見つかりません。")
+                    continue
+                
+                zip_name = os.path.basename(chosen_zip)
+                parent_name = os.path.basename(chosen_dir)
+                is_latest = (parent_name == "latest")
+                
+                archived_timestamp = archive_latest()
+                os.makedirs(latest_dir, exist_ok=True)
+                
+                if is_latest and archived_timestamp:
+                    parent_name = archived_timestamp
+                    chosen_zip = os.path.join(models_dir, archived_timestamp, zip_name)
+                
+                with open(os.path.join(latest_dir, "history.txt"), "w", encoding="utf-8") as f:
+                    f.write("【Model Lineage】\n")
+                    f.write(f"作成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"このモデルは、アーカイブ [{parent_name}] の [{zip_name}] から\n")
+                    f.write("既存の重みを引き継ぎ、新規ブランチとして学習を再開しています。\n")
+                    
+                return chosen_zip, latest_dir
+            else:
+                print("※正しい番号を入力してください。")
+        except ValueError:
+            print("※数字を入力してください。")
+
 
 def main():
     print("=== PyBullet 強化学習 (PPO) 訓練スクリプト ===")
     
-    # モデル保存用のディレクトリを作成
     models_dir = os.path.join("results", "models")
     os.makedirs(models_dir, exist_ok=True)
     
-    # 画面描画なし(DIRECTモード)で環境を作成し、計算速度を最大化する
+    resume_model_path, current_v_dir = select_training_mode()
+    
     env = CubeBalancingEnv(render_mode="direct")
-    
-    # 環境をMonitorでラップすることで、「何回目の試行か」などの詳しい情報がログに出るようになります
     env = Monitor(env)
-    
-    # (オプション) Gym環境の構造が正しいかチェック
     check_env(env)
-    
-    # Stable Baselines3が扱いやすいように環境をラップする
     vec_env = DummyVecEnv([lambda: env])
     
-    # PPOモデルの初期化（頭脳の作成）
-    model = PPO("MlpPolicy", vec_env, verbose=1, tensorboard_log="./results/tensorboard/")
+    if resume_model_path is None:
+        print(f"\n【Initialize】新規モデルの学習を開始します。（保存先: latest）")
+        model = PPO("MlpPolicy", vec_env, verbose=1, tensorboard_log="./results/tensorboard/")
+        reset_timesteps = True
+    else:
+        print(f"\n【Resume】指定されたチェックポイントの重みを引き継いで学習を再開します。（保存先: latest）")
+        model = PPO.load(resume_model_path, env=vec_env, tensorboard_log="./results/tensorboard/")
+        reset_timesteps = False
     
-    # 10000ステップ（約15秒）ごとに「その時点の脳みそ」を保存する設定
-    checkpoint_callback = CheckpointCallback(
+    checkpoint_callback = ShortCheckpointCallback(
         save_freq=10000,
-        save_path=models_dir,
-        name_prefix="ppo_cube_step"
+        save_path=current_v_dir
     )
     
-    # 学習の実行 (例: 10万ステップ)
     total_timesteps = 100000
-    print(f"\n学習を開始します... (目標: {total_timesteps} ステップ)")
-    model.learn(total_timesteps=total_timesteps, callback=checkpoint_callback)
+    print(f"\n学習を開始します... (目標学習ステップ数: {total_timesteps})")
     
-    # 学習したモデル（脳）を保存
-    save_path = os.path.join(models_dir, "ppo_cube")
+    model.learn(total_timesteps=total_timesteps, callback=checkpoint_callback, reset_num_timesteps=reset_timesteps)
+    
+    save_path = os.path.join(current_v_dir, "final")
     model.save(save_path)
-    print(f"\n学習が完了しました！ モデルを保存しました: {save_path}.zip")
+    print(f"\n学習が完了しました。 モデルを保存しました: {save_path}.zip")
 
 if __name__ == "__main__":
     main()
