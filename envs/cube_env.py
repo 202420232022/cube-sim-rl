@@ -155,33 +155,36 @@ class CubeBalancingEnv(gym.Env):
 
     def _compute_reward(self, obs):
         """
-        【最も重要なAIのしつけ(報酬設計)】
-        ここで「どういう状態が素晴らしいか」を定義します。
+        報酬関数の定義（Reward Shaping）
+        モデルが倒立状態を安定して維持するように、各状態パラメータに対する報酬・ペナルティを計算します。
         """
         cube_angle = obs[0]
         cube_velocity = obs[1]
         wheel_velocity = obs[2]
         
-        # ベース報酬：倒れていなければ毎ステップもらえる「生存ポイント」
-        reward = 2.0 
+        # 生存報酬 (Survival Reward)
+        # ※方策崩壊（早期終了方策への陥り）を防止するため、ベースとなる生存報酬を高めに設定しています。
+        reward = 10.0 
         
-        # 減点1：直立（0度）から傾いているほど減点 (二次関数から絶対値ベースに変更し、微小な揺れへの感度をアップ)
+        # 角度ペナルティ (Angle Penalty)
+        # ※微小な姿勢のブレに対する勾配を確保するため、二次関数ではなく絶対値を利用しています。
         angle_penalty = abs(cube_angle) * 10.0
         
-        # 減点2：無駄にキューブがグラグラ揺れていたら減点
+        # 角速度ペナルティ (Velocity Penalty)
+        # ※姿勢の安定化（振動の抑制）を促します。
         vel_penalty = (cube_velocity ** 2) * 0.1
         
-        # 減点3：モーター（フライホイール）が暴走して超高速回転していたら減点
-        # ※以前はここが厳しすぎて、モーターを回すくらいなら自ら倒れてゲームオーバーになる（自殺する）というバグが起きていました！
+        # 制御入力ペナルティ (Control Effort Penalty)
+        # ※モータの過剰な回転を抑制します。係数を大きくし過ぎると早期終了方策を引き起こすため微小値に設定しています。
         wheel_penalty = (wheel_velocity ** 2) * 0.00001
         
-        # 全部の減点を引いたものが今回のスコア
+        # 各ペナルティ項の減算
         total_reward = reward - angle_penalty - vel_penalty - wheel_penalty
         
-        # 【死への恐怖を教える】
-        # もし倒れてしまったら、とてつもない罰を与えて「絶対に倒れてはいけない」と教え込みます
+        # 終了ペナルティ (Terminal Penalty)
+        # ※方策崩壊（Policy Collapse）を防ぐため、エピソード終了条件（45度以上の傾き）を満たした場合に強力な負の報酬を与えます。
         if abs(cube_angle) > (math.pi / 4.0):
-            total_reward -= 50.0
+            total_reward -= 500.0
             
         return float(total_reward)
 
