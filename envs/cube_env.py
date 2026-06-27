@@ -80,7 +80,7 @@ class CubeBalancingEnv(gym.Env):
 
     def step(self, action):
         """
-        AIが「行動（モーターを回す）」を選択したときに呼ばれ、時間を1コマ進めます
+        AIが「行動(モーターを回す)」を選択したときに呼ばれ、時間を1コマ進めます
         """
         # 1. 床のヒンジ(joint 0)が勝手に固定されないよう念のため毎ステップ保持力を0に設定
         p.setJointMotorControl2(
@@ -118,7 +118,7 @@ class CubeBalancingEnv(gym.Env):
 
     def _get_obs(self):
         """
-        現在のセンサー値（角度、角速度など）を取得してAIに渡す関数
+        現在のセンサー値(角度、角速度など)を取得してAIに渡す関数
         """
         # ジョイント0（床とのヒンジ＝キューブの傾き）の状態を取得
         cube_state = p.getJointState(self.robot_id, 0)
@@ -133,7 +133,7 @@ class CubeBalancingEnv(gym.Env):
 
     def _compute_reward(self, obs):
         """
-        【最も重要なAIのしつけ（報酬設計）】
+        【最も重要なAIのしつけ(報酬設計)】
         ここで「どういう状態が素晴らしいか」を定義します。
         """
         cube_angle = obs[0]
