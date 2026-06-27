@@ -50,22 +50,31 @@ class CubeBalancingEnv(gym.Env):
         """
         super().reset(seed=seed)
         p.resetSimulation()
-        p.setGravity(0, 0, -9.81)
-        
-        # 床を読み込む
-        p.loadURDF("plane.urdf")
+        # 床を読み込む（衝突マージンによるバグを防ぐため、少し下に下げます）
+        p.loadURDF("plane.urdf", basePosition=[0, 0, -0.05])
         
         # キューブの物理モデル(URDF)を読み込む
         urdf_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'cube.urdf')
         self.robot_id = p.loadURDF(urdf_path, basePosition=[0, 0, 0], useFixedBase=True)
         
-        # モーターの摩擦や抵抗をオフにして、トルク制御モードにする準備
-        p.setJointMotorControl2(self.robot_id, self.motor_joint_index, controlMode=p.VELOCITY_CONTROL, force=0)
-
+        p.setGravity(0, 0, -9.81)
+        
         # 【初期状態の変更】
         # 最初から直立だとAIが学習しないため、わざと少しランダムに傾けた状態からスタートさせます
         initial_angle = self.np_random.uniform(low=-0.2, high=0.2) # -11度 〜 +11度くらい
         p.resetJointState(self.robot_id, 0, targetValue=initial_angle) # 床のヒンジ(joint 0)を傾ける
+        
+        # PyBulletはデフォルトで全ての関節に「位置を保持するモーター」がオンになっています。
+        # 床のヒンジ（joint 0）が勝手に固定されないように、保持モーターをオフ（force=0）にして重力で自然に倒れるようにします。
+        # ※必ず resetJointState の後に呼ぶ必要があります！
+        p.setJointMotorControl2(self.robot_id, 0, controlMode=p.VELOCITY_CONTROL, force=0)
+        
+        # モーター（joint 1）の摩擦や抵抗もオフにして、トルク制御モードにする準備
+        p.setJointMotorControl2(self.robot_id, self.motor_joint_index, controlMode=p.VELOCITY_CONTROL, force=0)
+        
+        # キューブを物理エンジン上で「スリープ（静止状態）」から強制的に「ウェイクアップ（計算開始）」させます
+        p.changeDynamics(self.robot_id, -1, activationState=p.ACTIVATION_STATE_WAKE_UP)
+        p.changeDynamics(self.robot_id, 0, activationState=p.ACTIVATION_STATE_WAKE_UP)
         
         return self._get_obs(), {}
 
@@ -73,7 +82,15 @@ class CubeBalancingEnv(gym.Env):
         """
         AIが「行動（モーターを回す）」を選択したときに呼ばれ、時間を1コマ進めます
         """
-        # 1. AIからの行動（-1.0〜1.0）を実際のトルクに変換してモーターに適用
+        # 1. 床のヒンジ(joint 0)が勝手に固定されないよう、念のため毎ステップ保持力を0に設定
+        p.setJointMotorControl2(
+            self.robot_id,
+            0,
+            controlMode=p.TORQUE_CONTROL,
+            force=0
+        )
+        
+        # 2. AIからの行動（-1.0〜1.0）を実際のトルクに変換してモーター(joint 1)に適用
         torque = float(np.clip(action[0], -1.0, 1.0)) * self.max_motor_torque
         p.setJointMotorControl2(
             self.robot_id, 
