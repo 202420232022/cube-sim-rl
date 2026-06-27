@@ -10,6 +10,7 @@ from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.utils import set_random_seed
 
 from envs.cube_env import CubeBalancingEnv
 
@@ -158,6 +159,11 @@ def main():
     env = Monitor(env)
     check_env(env)
     vec_env = DummyVecEnv([lambda: env])
+    
+    # 乱数シードの固定（再現性の確保）
+    seed = 42
+    set_random_seed(seed)
+    vec_env.seed(seed)
     
     if resume_model_path is None:
         print(f"\n【Initialize】新規モデルの学習を開始します。(保存先: latest)")
