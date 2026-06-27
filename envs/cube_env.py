@@ -42,8 +42,9 @@ class CubeBalancingEnv(gym.Env):
         self.motor_joint_index = 1 # URDFの2番目のジョイントがモーター
         
         # 【モーターパワーの最大値】URDFの数値をオーバーライドできます
-        # カリキュラムフェーズ1（初期学習）のため、本来の限界値(0.03)の10倍に設定しています
-        self.max_motor_torque = 0.3
+        # モーターの最大トルク (Nm)
+        # カリキュラムフェーズ1.5: トルクを0.3から0.1へ段階的に制限
+        self.max_motor_torque = 0.1
         
         # 【エピソードの最大ステップ数】
         self.current_step = 0
