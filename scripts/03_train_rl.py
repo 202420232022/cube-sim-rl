@@ -5,6 +5,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import CheckpointCallback
 
 from envs.cube_env import CubeBalancingEnv
 
@@ -15,8 +17,11 @@ def main():
     models_dir = os.path.join("results", "models")
     os.makedirs(models_dir, exist_ok=True)
     
-    # 画面を描画しながら(HUMANモード)学習を行い、上達の過程を見れるようにします！
-    env = CubeBalancingEnv(render_mode="human")
+    # 画面描画なし(DIRECTモード)で環境を作成し、計算速度を最大化する
+    env = CubeBalancingEnv(render_mode="direct")
+    
+    # 環境をMonitorでラップすることで、「何回目の試行か」などの詳しい情報がログに出るようになります
+    env = Monitor(env)
     
     # (オプション) Gym環境の構造が正しいかチェック
     check_env(env)
@@ -25,16 +30,19 @@ def main():
     vec_env = DummyVecEnv([lambda: env])
     
     # PPOモデルの初期化（頭脳の作成）
-    # MlpPolicy: 状態（角度や角速度）から行動（トルク）を出力する多層パーセプトロン
-    # verbose=1: 学習の進捗状況をターミナルに表示する
     model = PPO("MlpPolicy", vec_env, verbose=1, tensorboard_log="./results/tensorboard/")
     
+    # 10000ステップ（約15秒）ごとに「その時点の脳みそ」を保存する設定
+    checkpoint_callback = CheckpointCallback(
+        save_freq=10000,
+        save_path=models_dir,
+        name_prefix="ppo_cube_step"
+    )
+    
     # 学習の実行 (例: 10万ステップ)
-    # 1ステップ = 1/240秒なので、10万ステップは約416秒（約7分）分の経験に相当します。
-    # ※パソコンの性能にもよりますが、現実時間で数分で終わります。
     total_timesteps = 100000
     print(f"\n学習を開始します... (目標: {total_timesteps} ステップ)")
-    model.learn(total_timesteps=total_timesteps)
+    model.learn(total_timesteps=total_timesteps, callback=checkpoint_callback)
     
     # 学習したモデル（脳）を保存
     save_path = os.path.join(models_dir, "ppo_cube")

@@ -8,7 +8,7 @@ import os
 
 class CubeBalancingEnv(gym.Env):
     """
-    1辺倒立キューブの強化学習用環境
+    1辺倒立キューブ用強化学習環境。
     AIに対して「現在の角度」「角速度」を教え、「モーターのトルク」を受け取り、
     「報酬」を返すためのインターフェースです。
     """
@@ -19,7 +19,7 @@ class CubeBalancingEnv(gym.Env):
         self.render_mode = render_mode
         
         # --- 1. AIができる「行動 (Action)」の定義 ---
-        # モーターへの入力（例：-1.0〜1.0 のトルク指令値）
+        # モーターへの入力（例：-1.0〜1.0 のトルク指示値）
         # 【変更ポイント】もしモーターをもっと細かく制御させたい場合はここを変えます
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         
@@ -46,7 +46,7 @@ class CubeBalancingEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         """
-        環境の初期化（AIが失敗してやり直すたびに呼ばれます）
+        環境の初期化。AIが失敗してやり直すたびに呼ばれます。
         """
         super().reset(seed=seed)
         p.resetSimulation()
@@ -65,11 +65,11 @@ class CubeBalancingEnv(gym.Env):
         p.resetJointState(self.robot_id, 0, targetValue=initial_angle) # 床のヒンジ(joint 0)を傾ける
         
         # PyBulletはデフォルトで全ての関節に「位置を保持するモーター」がオンになっています。
-        # 床のヒンジ（joint 0）が勝手に固定されないように、保持モーターをオフ（force=0）にして重力で自然に倒れるようにします。
-        # ※必ず resetJointState の後に呼ぶ必要があります！
+        # 床のヒンジ（joint 0）が勝手に固定されないよう、保持モーターをオフ(force=0)にして重力で自然に倒れるようにします。
+        # ※必ず resetJointState の後に呼ぶ必要があります。
         p.setJointMotorControl2(self.robot_id, 0, controlMode=p.VELOCITY_CONTROL, force=0)
         
-        # モーター（joint 1）の摩擦や抵抗もオフにして、トルク制御モードにする準備
+        # モーター（joint 1）の摩擦抵抗もオフにして、トルク制御モードにする準備
         p.setJointMotorControl2(self.robot_id, self.motor_joint_index, controlMode=p.VELOCITY_CONTROL, force=0)
         
         # キューブを物理エンジン上で「スリープ（静止状態）」から強制的に「ウェイクアップ（計算開始）」させます
@@ -82,7 +82,7 @@ class CubeBalancingEnv(gym.Env):
         """
         AIが「行動（モーターを回す）」を選択したときに呼ばれ、時間を1コマ進めます
         """
-        # 1. 床のヒンジ(joint 0)が勝手に固定されないよう、念のため毎ステップ保持力を0に設定
+        # 1. 床のヒンジ(joint 0)が勝手に固定されないよう念のため毎ステップ保持力を0に設定
         p.setJointMotorControl2(
             self.robot_id,
             0,
@@ -141,20 +141,26 @@ class CubeBalancingEnv(gym.Env):
         wheel_velocity = obs[2]
         
         # ベース報酬：倒れていなければ毎ステップもらえる「生存ポイント」
-        reward = 1.0 
+        reward = 2.0 
         
         # 減点1：直立（0度）から傾いているほど減点
-        angle_penalty = (cube_angle ** 2) * 5.0
+        angle_penalty = (cube_angle ** 2) * 10.0
         
         # 減点2：無駄にキューブがグラグラ揺れていたら減点
         vel_penalty = (cube_velocity ** 2) * 0.1
         
         # 減点3：モーター（フライホイール）が暴走して超高速回転していたら減点
-        # 実際のモーターには限界があるため、無駄に回さないように教える
-        wheel_penalty = (wheel_velocity ** 2) * 0.001
+        # ※以前はここが厳しすぎて、モーターを回すくらいなら自ら倒れてゲームオーバーになる（自殺する）というバグが起きていました！
+        wheel_penalty = (wheel_velocity ** 2) * 0.00001
         
         # 全部の減点を引いたものが今回のスコア
         total_reward = reward - angle_penalty - vel_penalty - wheel_penalty
+        
+        # 【死への恐怖を教える】
+        # もし倒れてしまったら、とてつもない罰を与えて「絶対に倒れてはいけない」と教え込みます
+        if abs(cube_angle) > (math.pi / 4.0):
+            total_reward -= 50.0
+            
         return float(total_reward)
 
     def render(self):
