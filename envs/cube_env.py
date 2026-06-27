@@ -47,6 +47,12 @@ class CubeBalancingEnv(gym.Env):
         # 【エピソードの最大ステップ数】
         self.current_step = 0
         self.max_steps = 1000
+        
+        # 【ドメインランダマイゼーション (Sim-to-Real用)】
+        # 現実のIMUセンサー等の揺れをシミュレートするノイズの強さ（標準偏差）
+        self.noise_std_angle = 0.005      # 角度のノイズ (約0.3度)
+        self.noise_std_gyro = 0.05        # 角速度のノイズ
+        self.noise_std_motor = 0.5        # モーター回転数のノイズ
 
     def reset(self, seed=None, options=None):
         """
@@ -132,14 +138,19 @@ class CubeBalancingEnv(gym.Env):
         """
         # ジョイント0（床とのヒンジ＝キューブの傾き）の状態を取得
         cube_state = p.getJointState(self.robot_id, 0)
-        cube_angle = cube_state[0]
-        cube_velocity = cube_state[1]
+        true_cube_angle = cube_state[0]
+        true_cube_velocity = cube_state[1]
         
         # ジョイント1（モーター）の状態を取得
         motor_state = p.getJointState(self.robot_id, 1)
-        wheel_velocity = motor_state[1]
+        true_wheel_velocity = motor_state[1]
         
-        return np.array([cube_angle, cube_velocity, wheel_velocity], dtype=np.float32)
+        # 【Sim-to-Real】現実のセンサーのブレ（ノイズ）を意図的に付加する
+        noisy_cube_angle = true_cube_angle + self.np_random.normal(0, self.noise_std_angle)
+        noisy_cube_velocity = true_cube_velocity + self.np_random.normal(0, self.noise_std_gyro)
+        noisy_wheel_velocity = true_wheel_velocity + self.np_random.normal(0, self.noise_std_motor)
+        
+        return np.array([noisy_cube_angle, noisy_cube_velocity, noisy_wheel_velocity], dtype=np.float32)
 
     def _compute_reward(self, obs):
         """
