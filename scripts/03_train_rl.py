@@ -61,7 +61,7 @@ def select_zip_in_dir(chosen_dir):
 
 
 def select_training_mode():
-    models_dir = os.path.join("results", "models")
+    models_dir = "results"
     latest_dir = os.path.join(models_dir, "latest")
     
     archives = [os.path.join(models_dir, d) for d in os.listdir(models_dir) 
@@ -149,7 +149,7 @@ def select_training_mode():
 def main():
     print("=== PyBullet 強化学習 (PPO) 訓練スクリプト ===")
     
-    models_dir = os.path.join("results", "models")
+    models_dir = "results"
     os.makedirs(models_dir, exist_ok=True)
     
     resume_model_path, current_v_dir = select_training_mode()
@@ -161,11 +161,11 @@ def main():
     
     if resume_model_path is None:
         print(f"\n【Initialize】新規モデルの学習を開始します。（保存先: latest）")
-        model = PPO("MlpPolicy", vec_env, verbose=1, tensorboard_log="./results/tensorboard/")
+        model = PPO("MlpPolicy", vec_env, verbose=1, tensorboard_log=os.path.join(current_v_dir, "logs"))
         reset_timesteps = True
     else:
         print(f"\n【Resume】指定されたチェックポイントの重みを引き継いで学習を再開します。（保存先: latest）")
-        model = PPO.load(resume_model_path, env=vec_env, tensorboard_log="./results/tensorboard/")
+        model = PPO.load(resume_model_path, env=vec_env, tensorboard_log=os.path.join(current_v_dir, "logs"))
         reset_timesteps = False
     
     checkpoint_callback = ShortCheckpointCallback(
@@ -178,9 +178,7 @@ def main():
     
     model.learn(total_timesteps=total_timesteps, callback=checkpoint_callback, reset_num_timesteps=reset_timesteps)
     
-    save_path = os.path.join(current_v_dir, "final")
-    model.save(save_path)
-    print(f"\n学習が完了しました。 モデルを保存しました: {save_path}.zip")
+    print(f"\n学習が完了しました。")
 
 if __name__ == "__main__":
     main()

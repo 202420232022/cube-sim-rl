@@ -10,7 +10,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from envs.cube_env import CubeBalancingEnv
 
 def select_model_interactive():
-    models_dir = os.path.join("results", "models")
+    models_dir = "results"
     all_dirs = [os.path.join(models_dir, d) for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d))]
     
     if not all_dirs:
