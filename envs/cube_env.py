@@ -42,7 +42,7 @@ class CubeBalancingEnv(gym.Env):
         self.motor_joint_index = 1 # URDFの2番目のジョイントがモーター
         
         # 【モーターパワーの最大値】URDFの数値をオーバーライドできます
-        self.max_motor_torque = 0.5 
+        self.max_motor_torque = 0.03
         
         # 【エピソードの最大ステップ数】
         self.current_step = 0
@@ -71,7 +71,7 @@ class CubeBalancingEnv(gym.Env):
         
         # 【初期状態の変更】
         # 最初から直立だとAIが学習しないため、わざと少しランダムに傾けた状態からスタートさせます
-        initial_angle = self.np_random.uniform(low=-0.2, high=0.2) # -11度 〜 +11度くらい
+        initial_angle = self.np_random.uniform(low=-0.1, high=0.1) # -11度 〜 +11度くらい
         p.resetJointState(self.robot_id, 0, targetValue=initial_angle) # 床のヒンジ(joint 0)を傾ける
         
         # PyBulletはデフォルトで全ての関節に「位置を保持するモーター」がオンになっています。
