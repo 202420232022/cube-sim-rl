@@ -42,17 +42,18 @@ class CubeBalancingEnv(gym.Env):
         self.motor_joint_index = 1 # URDFの2番目のジョイントがモーター
         
         # 【モーターパワーの最大値】URDFの数値をオーバーライドできます
-        self.max_motor_torque = 0.03
+        # カリキュラムフェーズ1（初期学習）のため、本来の限界値(0.03)の10倍に設定しています
+        self.max_motor_torque = 0.3
         
         # 【エピソードの最大ステップ数】
         self.current_step = 0
         self.max_steps = 1000
         
         # 【ドメインランダマイゼーション (Sim-to-Real用)】
-        # 現実のIMUセンサー等の揺れをシミュレートするノイズの強さ（標準偏差）
-        self.noise_std_angle = 0.005      # 角度のノイズ (約0.3度)
-        self.noise_std_gyro = 0.05        # 角速度のノイズ
-        self.noise_std_motor = 0.5        # モーター回転数のノイズ
+        # カリキュラムフェーズ1（初期学習）のため、ノイズを無効化しています
+        self.noise_std_angle = 0.0      # 角度のノイズ
+        self.noise_std_gyro = 0.0       # 角速度のノイズ
+        self.noise_std_motor = 0.0      # モーター回転数のノイズ
 
     def reset(self, seed=None, options=None):
         """
@@ -70,8 +71,8 @@ class CubeBalancingEnv(gym.Env):
         p.setGravity(0, 0, -9.81)
         
         # 【初期状態の変更】
-        # 最初から直立だとAIが学習しないため、わざと少しランダムに傾けた状態からスタートさせます
-        initial_angle = self.np_random.uniform(low=-0.1, high=0.1) # -11度 〜 +11度くらい
+        # カリキュラムフェーズ1（初期学習）のため、ほぼ直立の状態からスタートさせます
+        initial_angle = self.np_random.uniform(low=-0.01, high=0.01) # -0.5度 〜 +0.5度
         p.resetJointState(self.robot_id, 0, targetValue=initial_angle) # 床のヒンジ(joint 0)を傾ける
         
         # PyBulletはデフォルトで全ての関節に「位置を保持するモーター」がオンになっています。
