@@ -43,8 +43,8 @@ class CubeBalancingEnv(gym.Env):
         
         # 【モーターパワーの最大値】URDFの数値をオーバーライドできます
         # モーターの最大トルク (Nm)
-        # カリキュラムフェーズ1.5: トルクを0.3から0.1へ段階的に制限
-        self.max_motor_torque = 0.1
+        # カリキュラムフェーズ1.5: トルクを0.3から0.02ずつ慎重に制限していく（現在は0.28）
+        self.max_motor_torque = 0.28
         
         # 【エピソードの最大ステップ数】
         self.current_step = 0
