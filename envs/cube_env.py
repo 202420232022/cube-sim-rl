@@ -132,7 +132,9 @@ class CubeBalancingEnv(gym.Env):
         # 1000ステップ（約16.6秒）耐えきったら時間切れクリア(Truncated)
         truncated = bool(self.current_step >= self.max_steps)
         
-        return obs, reward, terminated, truncated, {}
+        info = {"is_timeout_success": truncated}
+        
+        return obs, reward, terminated, truncated, info
 
     def _get_obs(self):
         """

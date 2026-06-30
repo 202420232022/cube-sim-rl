@@ -106,7 +106,14 @@ def main():
         time.sleep(dt)
         
         if done:
-            print("モデルがバランスを崩してオペレーションが終了しました。リセットします。")
+            # vec_env を経由しているため、環境からの info は info[0] に入っています
+            is_success = info[0].get("is_timeout_success", False) or info[0].get("TimeLimit.truncated", False)
+            
+            if is_success:
+                print("制限時間の間バランスを維持しました。リセットします。")
+            else:
+                print("モデルがバランスを崩して転倒しました。リセットします。")
+                
             obs = vec_env.reset()
             time.sleep(0.5)
 
